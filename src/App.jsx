@@ -25,7 +25,14 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen p-4 sm:p-8 transition-colors duration-300">
+      <div className="min-h-screen p-4 sm:p-8 pt-20 transition-colors duration-300 relative">
+        <div className="absolute top-4 left-4 z-50 flex items-center gap-3">
+          <img src="/favicon.svg" alt="Avadio Logo" className="w-8 h-8 rounded-lg shadow-sm" />
+          <span className="font-black text-xl tracking-tight hidden sm:inline-block">
+            Avadio
+          </span>
+        </div>
+        
         <div className="absolute top-4 right-4 z-50">
           <button 
             onClick={() => setDarkMode(!darkMode)}

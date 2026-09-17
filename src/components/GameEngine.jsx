@@ -16,8 +16,10 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
   const [reversedOriginalBuffer, setReversedOriginalBuffer] = useState(null);
   const [previewBuffer, setPreviewBuffer] = useState(null);
   const [previewBlob, setPreviewBlob] = useState(null);
+  const [previewReversedBuffer, setPreviewReversedBuffer] = useState(null);
   const [activeFilter, setActiveFilter] = useState('normal');
   const [isRendering, setIsRendering] = useState(false);
+  const [hint, setHint] = useState('');
   
   const [mimicBlob, setMimicBlob] = useState(null);
   const [reversedMimicBuffer, setReversedMimicBuffer] = useState(null);
@@ -49,6 +51,8 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
         const { buffer, blob } = await engine.applyFilterAndRender(originalBlob, activeFilter);
         setPreviewBuffer(buffer);
         setPreviewBlob(blob);
+        const revBuffer = await engine.reverseAudio(blob);
+        setPreviewReversedBuffer(revBuffer);
         setIsRendering(false);
       }
     };
@@ -80,6 +84,7 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
     setOriginalBlob(null);
     setPreviewBuffer(null);
     setPreviewBlob(null);
+    setPreviewReversedBuffer(null);
     setActiveFilter('normal');
     setPhase('recording_original');
   };
@@ -118,7 +123,9 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
     setReversedOriginalBuffer(null);
     setPreviewBuffer(null);
     setPreviewBlob(null);
+    setPreviewReversedBuffer(null);
     setActiveFilter('normal');
+    setHint('');
     setMimicBlob(null);
     setReversedMimicBuffer(null);
     setPhase('recording_original');
@@ -183,14 +190,34 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
           <h2 className="text-3xl font-black mb-3">Vérification de <span className="text-teal-500">{p1.name}</span></h2>
           <p className="opacity-70 mb-8 font-medium text-lg">Écoute ton enregistrement et ajoute un filtre si tu le souhaites !</p>
           
-          <div className="flex justify-center mb-8">
+          <div className="flex justify-center gap-4 mb-8">
             <button 
               onClick={() => previewBuffer && engine.playBuffer(previewBuffer)} 
               disabled={isRendering || !previewBuffer}
               className="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-500 hover:text-white p-6 rounded-full shadow-lg transition-colors disabled:opacity-50"
+              title="Écouter l'original (avec filtre)"
             >
               {isRendering ? <Loader2 className="animate-spin" size={32} /> : <Play size={32} fill="currentColor" />}
             </button>
+            <button 
+              onClick={() => previewReversedBuffer && engine.playBuffer(previewReversedBuffer)} 
+              disabled={isRendering || !previewReversedBuffer}
+              className="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white p-6 rounded-full shadow-lg transition-colors disabled:opacity-50"
+              title="Écouter à l'envers (ce que J2 entendra)"
+            >
+              {isRendering ? <Loader2 className="animate-spin" size={32} /> : <Play size={32} fill="currentColor" className="rotate-180" />}
+            </button>
+          </div>
+
+          <div className="mb-10 max-w-md mx-auto">
+            <h3 className="text-sm font-bold opacity-70 uppercase tracking-wider mb-2">Un petit indice pour {p2.name} ? (Optionnel)</h3>
+            <input 
+              type="text" 
+              value={hint}
+              onChange={(e) => setHint(e.target.value)}
+              placeholder="Ex: Titre d'un film, un métier..."
+              className="input-clean font-bold text-center w-full"
+            />
           </div>
 
           <div className="mb-10">
@@ -235,8 +262,15 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
       {phase === 'listening_reversed' && (
         <motion.div animate={{ opacity: 1, scale: 1 }} initial={{ opacity: 0, scale: 0.95 }} className="w-full">
           <h2 className="text-3xl font-black mb-3">À toi, <span className="text-rose-500">{p2.name}</span> !</h2>
-          <p className="opacity-70 mb-10 font-medium text-lg">Écoute l'enregistrement à l'envers, puis essaie de l'imiter.</p>
+          <p className="opacity-70 mb-6 font-medium text-lg">Écoute l'enregistrement à l'envers, puis essaie de l'imiter.</p>
           
+          {hint && (
+            <div className="mb-8 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200 max-w-md mx-auto">
+              <span className="block text-xs uppercase font-bold opacity-70 mb-1">Indice de {p1.name}</span>
+              <p className="font-black text-lg">{hint}</p>
+            </div>
+          )}
+
           <div className="flex justify-center mb-10">
             <button onClick={playReversedOriginal} className="btn-primary flex items-center gap-3 py-4 px-8 text-lg rounded-full shadow-lg">
               <Play fill="currentColor" /> Écouter l'extrait
@@ -253,8 +287,15 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
       {phase === 'recording_mimic' && (
         <motion.div animate={{ opacity: 1, scale: 1 }} initial={{ opacity: 0, scale: 0.95 }} className="w-full">
            <h2 className="text-3xl font-black mb-3"><span className="text-rose-500">{p2.name}</span> imite le son</h2>
-           <p className="opacity-70 mb-8 font-medium text-lg">Tu peux réécouter l'extrait autant de fois que tu veux !</p>
+           <p className="opacity-70 mb-6 font-medium text-lg">Tu peux réécouter l'extrait autant de fois que tu veux !</p>
            
+           {hint && (
+            <div className="mb-8 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200 max-w-md mx-auto">
+              <span className="block text-xs uppercase font-bold opacity-70 mb-1">Indice</span>
+              <p className="font-black text-lg">{hint}</p>
+            </div>
+          )}
+
            <AudioVisualizer engine={engine} isRecording={isRecording} />
            
            {isRecording && timeLimit > 0 && (
@@ -283,33 +324,10 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
         </motion.div>
       )}
 
-      {/* PHASE 4: Révélation */}
-      {phase === 'reveal' && (
+      {/* PHASE 4:      {phase === 'reveal' && (
         <motion.div animate={{ opacity: 1, scale: 1 }} initial={{ opacity: 0, scale: 0.95 }} className="w-full">
           <h2 className="text-4xl font-black mb-6 text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-rose-500">Révélation !</h2>
           
-          <div className="mb-10 p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <h3 className="text-lg font-bold mb-4">Qu'est-ce que <span className="text-rose-500">{p2.name}</span> a compris ?</h3>
-            <input 
-              type="text" 
-              value={guessedPhrase}
-              onChange={(e) => setGuessedPhrase(e.target.value)}
-              disabled={isGuessValidated}
-              placeholder="Tape ta supposition ici avant de valider..."
-              className="input-clean text-center font-bold text-lg mb-4"
-            />
-            <p className="text-sm opacity-60 mb-6">Tu peux t'aider en écoutant l'imitation ci-dessous.</p>
-            {!isGuessValidated && (
-              <button 
-                onClick={() => setIsGuessValidated(true)} 
-                disabled={!guessedPhrase.trim()}
-                className="btn-primary py-2 px-6 text-sm"
-              >
-                Valider ma réponse
-              </button>
-            )}
-          </div>
-
           <div className="grid md:grid-cols-2 gap-6 mb-12">
             <div className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center">
               <h3 className="text-sm font-bold uppercase tracking-wider opacity-50 mb-2">Original de</h3>
@@ -332,6 +350,35 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
                 <Play size={28} fill="currentColor" />
               </button>
             </div>
+          </div>
+
+          <div className="mb-10 p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <h3 className="text-lg font-bold mb-4">Qu'est-ce que <span className="text-rose-500">{p2.name}</span> a compris ?</h3>
+            
+            {hint && (
+              <div className="mb-4 text-amber-600 dark:text-amber-400 font-medium">
+                Indice : "{hint}"
+              </div>
+            )}
+
+            <input 
+              type="text" 
+              value={guessedPhrase}
+              onChange={(e) => setGuessedPhrase(e.target.value)}
+              disabled={isGuessValidated}
+              placeholder="Tape ta supposition ici avant de valider..."
+              className="input-clean text-center font-bold text-lg mb-4"
+            />
+            <p className="text-sm opacity-60 mb-6">Tu peux t'aider en écoutant l'imitation ci-dessus.</p>
+            {!isGuessValidated && (
+              <button 
+                onClick={() => setIsGuessValidated(true)} 
+                disabled={!guessedPhrase.trim()}
+                className="btn-primary py-2 px-6 text-sm"
+              >
+                Valider ma réponse
+              </button>
+            )}
           </div>
 
           <button 

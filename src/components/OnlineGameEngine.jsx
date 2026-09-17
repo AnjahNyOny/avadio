@@ -23,10 +23,11 @@ export default function OnlineGameEngine({ roomId, room }) {
 
   // Local review states for P1
   const [originalBlob, setOriginalBlob] = useState(null);
-  const [previewBuffer, setPreviewBuffer] = useState(null);
   const [previewBlob, setPreviewBlob] = useState(null);
+  const [previewReversedBuffer, setPreviewReversedBuffer] = useState(null);
   const [activeFilter, setActiveFilter] = useState('normal');
   const [isRendering, setIsRendering] = useState(false);
+  const [localHint, setLocalHint] = useState('');
 
   const timeLimit = room.timeLimit || 0;
   const [timeLeft, setTimeLeft] = useState(null);
@@ -97,6 +98,8 @@ export default function OnlineGameEngine({ roomId, room }) {
         const { buffer, blob } = await engine.applyFilterAndRender(originalBlob, activeFilter);
         setPreviewBuffer(buffer);
         setPreviewBlob(blob);
+        const revBuffer = await engine.reverseAudio(blob);
+        setPreviewReversedBuffer(revBuffer);
         setIsRendering(false);
       }
     };
@@ -110,7 +113,9 @@ export default function OnlineGameEngine({ roomId, room }) {
     setOriginalBlob(null);
     setPreviewBuffer(null);
     setPreviewBlob(null);
+    setPreviewReversedBuffer(null);
     setActiveFilter('normal');
+    setLocalHint('');
     setDownloadedOriginalBuffer(null);
     setDownloadedReversedOriginalBuffer(null);
     setDownloadedDoubleReversedMimicBuffer(null);
@@ -137,6 +142,7 @@ export default function OnlineGameEngine({ roomId, room }) {
     setOriginalBlob(null);
     setPreviewBuffer(null);
     setPreviewBlob(null);
+    setPreviewReversedBuffer(null);
     setActiveFilter('normal');
     await roomService.updateGameState(roomId, {
       ...gameState,
@@ -151,7 +157,8 @@ export default function OnlineGameEngine({ roomId, room }) {
       ...gameState,
       phase: 'listening_reversed',
       originalAudioUrl: url,
-      secretPhrase: localSecretPhrase
+      secretPhrase: localSecretPhrase,
+      hint: localHint
     });
     setIsUploading(false);
   };
@@ -196,7 +203,8 @@ export default function OnlineGameEngine({ roomId, room }) {
       originalAudioUrl: '',
       mimicAudioUrl: '',
       secretPhrase: '',
-      guessedPhrase: ''
+      guessedPhrase: '',
+      hint: ''
     });
   };
 
@@ -289,14 +297,35 @@ export default function OnlineGameEngine({ roomId, room }) {
             <>
               <p className="opacity-70 mb-8 font-medium text-lg">Écoute ton enregistrement et ajoute un filtre !</p>
               
-              <div className="flex justify-center mb-8">
+              <div className="flex justify-center gap-4 mb-8">
                 <button 
                   onClick={() => previewBuffer && engine.playBuffer(previewBuffer)} 
                   disabled={isRendering || !previewBuffer || isUploading}
                   className="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-500 hover:text-white p-6 rounded-full shadow-lg transition-colors disabled:opacity-50"
+                  title="Écouter l'original (avec filtre)"
                 >
                   {isRendering ? <Loader2 className="animate-spin" size={32} /> : <Play size={32} fill="currentColor" />}
                 </button>
+                <button 
+                  onClick={() => previewReversedBuffer && engine.playBuffer(previewReversedBuffer)} 
+                  disabled={isRendering || !previewReversedBuffer || isUploading}
+                  className="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white p-6 rounded-full shadow-lg transition-colors disabled:opacity-50"
+                  title="Écouter à l'envers (ce que J2 entendra)"
+                >
+                  {isRendering ? <Loader2 className="animate-spin" size={32} /> : <Play size={32} fill="currentColor" className="rotate-180" />}
+                </button>
+              </div>
+
+              <div className="mb-10 max-w-md mx-auto">
+                <h3 className="text-sm font-bold opacity-70 uppercase tracking-wider mb-2">Un petit indice pour {p2?.name} ? (Optionnel)</h3>
+                <input 
+                  type="text" 
+                  value={localHint}
+                  onChange={(e) => setLocalHint(e.target.value)}
+                  disabled={isUploading}
+                  placeholder="Ex: Titre d'un film, un métier..."
+                  className="input-clean font-bold text-center w-full"
+                />
               </div>
 
               <div className="mb-10">
@@ -356,7 +385,15 @@ export default function OnlineGameEngine({ roomId, room }) {
           
           {currentUserId === p2?.id ? (
             <>
-              <p className="opacity-70 mb-10 font-medium text-lg">Écoute l'enregistrement à l'envers, puis essaie de l'imiter.</p>
+              <p className="opacity-70 mb-6 font-medium text-lg">Écoute l'enregistrement à l'envers, puis essaie de l'imiter.</p>
+              
+              {gameState.hint && (
+                <div className="mb-8 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200 max-w-md mx-auto">
+                  <span className="block text-xs uppercase font-bold opacity-70 mb-1">Indice de {p1?.name}</span>
+                  <p className="font-black text-lg">{gameState.hint}</p>
+                </div>
+              )}
+
               <div className="flex justify-center mb-10">
                 <button 
                   onClick={() => downloadedReversedOriginalBuffer && engine.playBuffer(downloadedReversedOriginalBuffer)} 
@@ -385,7 +422,15 @@ export default function OnlineGameEngine({ roomId, room }) {
            
            {currentUserId === p2?.id ? (
              <>
-               <p className="opacity-70 mb-8 font-medium text-lg">Tu peux réécouter l'extrait autant de fois que tu veux !</p>
+               <p className="opacity-70 mb-6 font-medium text-lg">Tu peux réécouter l'extrait autant de fois que tu veux !</p>
+               
+               {gameState.hint && (
+                <div className="mb-8 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200 max-w-md mx-auto">
+                  <span className="block text-xs uppercase font-bold opacity-70 mb-1">Indice</span>
+                  <p className="font-black text-lg">{gameState.hint}</p>
+                </div>
+               )}
+
                <AudioVisualizer engine={engine} isRecording={isRecording} />
                
                {isRecording && timeLimit > 0 && (
@@ -424,40 +469,6 @@ export default function OnlineGameEngine({ roomId, room }) {
         <motion.div animate={{ opacity: 1, scale: 1 }} initial={{ opacity: 0, scale: 0.95 }} className="w-full">
           <h2 className="text-4xl font-black mb-10 text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-rose-500">Révélation !</h2>
           
-          {!gameState.guessedPhrase ? (
-            <div className="mb-10 p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-              {currentUserId === p2?.id ? (
-                <>
-                  <h3 className="text-lg font-bold mb-4">Qu'as-tu compris ?</h3>
-                  <input 
-                    type="text" 
-                    value={localGuessedPhrase}
-                    onChange={(e) => setLocalGuessedPhrase(e.target.value)}
-                    placeholder="Tape ta supposition ici..."
-                    className="input-clean text-center font-bold text-lg mb-4"
-                  />
-                  <p className="text-sm opacity-60 mb-6">Aide-toi en écoutant ton imitation en dessous.</p>
-                  <button 
-                    onClick={() => roomService.updateGameState(roomId, { ...gameState, guessedPhrase: localGuessedPhrase })} 
-                    disabled={!localGuessedPhrase.trim()}
-                    className="btn-primary py-3 px-8 text-lg"
-                  >
-                    Valider ma réponse
-                  </button>
-                </>
-              ) : (
-                <div className="py-8 animate-pulse text-lg font-bold opacity-70">
-                  {p2?.name} est en train d'écrire sa supposition...
-                </div>
-              )}
-            </div>
-          ) : (
-             <div className="mb-10 p-6 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-200 dark:border-rose-800">
-                <span className="block text-xs uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-2">Supposition de {p2?.name} validée !</span>
-                <p className="text-xl font-black">{gameState.guessedPhrase}</p>
-             </div>
-          )}
-
           <div className="grid md:grid-cols-2 gap-6 mb-12">
             <div className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center">
               <h3 className="text-sm font-bold uppercase tracking-wider opacity-50 mb-2">Original de</h3>
@@ -485,6 +496,47 @@ export default function OnlineGameEngine({ roomId, room }) {
               </button>
             </div>
           </div>
+
+          {!gameState.guessedPhrase ? (
+            <div className="mb-10 p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+              {currentUserId === p2?.id ? (
+                <>
+                  <h3 className="text-lg font-bold mb-4">Qu'as-tu compris ?</h3>
+                  
+                  {gameState.hint && (
+                    <div className="mb-4 text-amber-600 dark:text-amber-400 font-medium">
+                      Indice : "{gameState.hint}"
+                    </div>
+                  )}
+
+                  <input 
+                    type="text" 
+                    value={localGuessedPhrase}
+                    onChange={(e) => setLocalGuessedPhrase(e.target.value)}
+                    placeholder="Tape ta supposition ici..."
+                    className="input-clean text-center font-bold text-lg mb-4"
+                  />
+                  <p className="text-sm opacity-60 mb-6">Aide-toi en écoutant ton imitation en dessus.</p>
+                  <button 
+                    onClick={() => roomService.updateGameState(roomId, { ...gameState, guessedPhrase: localGuessedPhrase })} 
+                    disabled={!localGuessedPhrase.trim()}
+                    className="btn-primary py-3 px-8 text-lg"
+                  >
+                    Valider ma réponse
+                  </button>
+                </>
+              ) : (
+                <div className="py-8 animate-pulse text-lg font-bold opacity-70">
+                  {p2?.name} est en train d'écrire sa supposition...
+                </div>
+              )}
+            </div>
+          ) : (
+             <div className="mb-10 p-6 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-200 dark:border-rose-800">
+                <span className="block text-xs uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-2">Supposition de {p2?.name} validée !</span>
+                <p className="text-xl font-black">{gameState.guessedPhrase}</p>
+             </div>
+          )}
 
           {(currentUserId === p1?.id && gameState.guessedPhrase) && (
             <button onClick={() => advancePhase('result')} className="btn-primary w-full py-4 text-lg flex justify-center items-center gap-3">
