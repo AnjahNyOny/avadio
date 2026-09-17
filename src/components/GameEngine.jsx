@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Mic, Square, Play, Check, ArrowRight, Wand2 } from 'lucide-react';
+import { Mic, Square, Play, Check, ArrowRight, Wand2, RefreshCw, Send, Loader2 } from 'lucide-react';
 import { AudioEngine } from '../services/audioEngine';
 import AudioVisualizer from './AudioVisualizer';
 import { getRandomSuggestion } from '../constants/suggestions';
+import { VOICE_FILTERS } from '../services/audioFilters';
 
 const engine = new AudioEngine();
 
@@ -13,6 +14,10 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
   const [timeLeft, setTimeLeft] = useState(null);
   const [originalBlob, setOriginalBlob] = useState(null);
   const [reversedOriginalBuffer, setReversedOriginalBuffer] = useState(null);
+  const [previewBuffer, setPreviewBuffer] = useState(null);
+  const [previewBlob, setPreviewBlob] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('normal');
+  const [isRendering, setIsRendering] = useState(false);
   
   const [mimicBlob, setMimicBlob] = useState(null);
   const [reversedMimicBuffer, setReversedMimicBuffer] = useState(null);
@@ -37,6 +42,19 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
     return () => clearInterval(timer);
   }, [isRecording, timeLeft, phase]);
 
+  useEffect(() => {
+    const updatePreview = async () => {
+      if (originalBlob && phase === 'review_original') {
+        setIsRendering(true);
+        const { buffer, blob } = await engine.applyFilterAndRender(originalBlob, activeFilter);
+        setPreviewBuffer(buffer);
+        setPreviewBlob(blob);
+        setIsRendering(false);
+      }
+    };
+    updatePreview();
+  }, [originalBlob, activeFilter, phase]);
+
   const handleStartRecording = async () => {
     await engine.startRecording();
     setIsRecording(true);
@@ -48,10 +66,22 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
     setIsRecording(false);
     setTimeLeft(null);
     setOriginalBlob(blob);
-    // Prepare the reversed version immediately
-    const reversedBuffer = await engine.reverseAudio(blob);
+    setPhase('review_original');
+  };
+
+  const handleConfirmOriginal = async () => {
+    // Reverse the filtered version for phase 2
+    const reversedBuffer = await engine.reverseAudio(previewBlob);
     setReversedOriginalBuffer(reversedBuffer);
     setPhase('listening_reversed');
+  };
+
+  const handleRetakeOriginal = () => {
+    setOriginalBlob(null);
+    setPreviewBuffer(null);
+    setPreviewBlob(null);
+    setActiveFilter('normal');
+    setPhase('recording_original');
   };
 
   const handleStopRecordingMimic = async () => {
@@ -139,7 +169,61 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
         </motion.div>
       )}
 
-      {/* PHASE 2: J2 écoute */}
+      {/* PHASE 1.5: Review & Filter */}
+      {phase === 'review_original' && (
+        <motion.div animate={{ opacity: 1, scale: 1 }} initial={{ opacity: 0, scale: 0.95 }} className="w-full">
+          <h2 className="text-3xl font-black mb-3">Vérification de <span className="text-teal-500">{p1.name}</span></h2>
+          <p className="opacity-70 mb-8 font-medium text-lg">Écoute ton enregistrement et ajoute un filtre si tu le souhaites !</p>
+          
+          <div className="flex justify-center mb-8">
+            <button 
+              onClick={() => previewBuffer && engine.playBuffer(previewBuffer)} 
+              disabled={isRendering || !previewBuffer}
+              className="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-500 hover:text-white p-6 rounded-full shadow-lg transition-colors disabled:opacity-50"
+            >
+              {isRendering ? <Loader2 className="animate-spin" size={32} /> : <Play size={32} fill="currentColor" />}
+            </button>
+          </div>
+
+          <div className="mb-10">
+            <h3 className="text-sm font-bold opacity-70 uppercase tracking-wider mb-4">Filtres Vocaux</h3>
+            <div className="flex flex-wrap justify-center gap-3">
+              {VOICE_FILTERS.map(filter => (
+                <button
+                  key={filter.id}
+                  onClick={() => setActiveFilter(filter.id)}
+                  className={`px-4 py-3 rounded-xl font-bold flex flex-col items-center gap-1 transition-all ${
+                    activeFilter === filter.id 
+                      ? 'bg-rose-500 text-white shadow-lg scale-105' 
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <span className="text-2xl">{filter.icon}</span>
+                  <span className="text-xs">{filter.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 mt-8">
+            <button 
+              onClick={handleRetakeOriginal}
+              className="flex-1 btn-secondary py-4 text-lg flex justify-center items-center gap-3"
+            >
+              <RefreshCw size={20} /> Recommencer
+            </button>
+            <button 
+              onClick={handleConfirmOriginal}
+              disabled={isRendering}
+              className="flex-1 btn-primary py-4 text-lg flex justify-center items-center gap-3 disabled:opacity-50"
+            >
+              Valider & Envoyer <Send size={20} />
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* PHASE 2: J2 écoute l'envers */}
       {phase === 'listening_reversed' && (
         <motion.div animate={{ opacity: 1, scale: 1 }} initial={{ opacity: 0, scale: 0.95 }} className="w-full">
           <h2 className="text-3xl font-black mb-3">À toi, <span className="text-rose-500">{p2.name}</span> !</h2>

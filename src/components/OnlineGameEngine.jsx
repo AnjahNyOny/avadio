@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Mic, Square, Play, Check, ArrowRight, Loader2, Wand2 } from 'lucide-react';
+import { Mic, Square, Play, Check, ArrowRight, Loader2, Wand2, RefreshCw, Send } from 'lucide-react';
 import { AudioEngine } from '../services/audioEngine';
 import AudioVisualizer from './AudioVisualizer';
 import { roomService } from '../services/roomService';
 import { auth } from '../firebase';
 import { getRandomSuggestion } from '../constants/suggestions';
+import { VOICE_FILTERS } from '../services/audioFilters';
 
 const engine = new AudioEngine();
 
@@ -19,6 +20,13 @@ export default function OnlineGameEngine({ roomId, room }) {
   const [downloadedReversedOriginalBuffer, setDownloadedReversedOriginalBuffer] = useState(null);
   
   const [downloadedDoubleReversedMimicBuffer, setDownloadedDoubleReversedMimicBuffer] = useState(null);
+
+  // Local review states for P1
+  const [originalBlob, setOriginalBlob] = useState(null);
+  const [previewBuffer, setPreviewBuffer] = useState(null);
+  const [previewBlob, setPreviewBlob] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('normal');
+  const [isRendering, setIsRendering] = useState(false);
 
   const timeLimit = room.timeLimit || 0;
   const [timeLeft, setTimeLeft] = useState(null);
@@ -95,6 +103,19 @@ export default function OnlineGameEngine({ roomId, room }) {
     return () => clearInterval(timer);
   }, [isRecording, timeLeft, gameState.phase]);
 
+  useEffect(() => {
+    const updatePreview = async () => {
+      if (originalBlob && gameState.phase === 'review_original' && currentUserId === p1?.id) {
+        setIsRendering(true);
+        const { buffer, blob } = await engine.applyFilterAndRender(originalBlob, activeFilter);
+        setPreviewBuffer(buffer);
+        setPreviewBlob(blob);
+        setIsRendering(false);
+      }
+    };
+    updatePreview();
+  }, [originalBlob, activeFilter, gameState.phase, currentUserId, p1?.id]);
+
   const handleStartRecording = async () => {
     await engine.startRecording();
     setIsRecording(true);
@@ -105,16 +126,33 @@ export default function OnlineGameEngine({ roomId, room }) {
     const blob = await engine.stopRecording();
     setIsRecording(false);
     setTimeLeft(null);
-    setIsUploading(true);
+    setOriginalBlob(blob);
+    await roomService.updateGameState(roomId, {
+      ...gameState,
+      phase: 'review_original'
+    });
+  };
 
-    const url = await roomService.uploadAudio(roomId, 'original', blob);
+  const handleRetakeOriginal = async () => {
+    setOriginalBlob(null);
+    setPreviewBuffer(null);
+    setPreviewBlob(null);
+    setActiveFilter('normal');
+    await roomService.updateGameState(roomId, {
+      ...gameState,
+      phase: 'recording_original'
+    });
+  };
+
+  const handleConfirmOriginal = async () => {
+    setIsUploading(true);
+    const url = await roomService.uploadAudio(roomId, 'original', previewBlob);
     await roomService.updateGameState(roomId, {
       ...gameState,
       phase: 'listening_reversed',
       originalAudioUrl: url,
       secretPhrase: localSecretPhrase
     });
-    
     setIsUploading(false);
   };
 
@@ -166,6 +204,10 @@ export default function OnlineGameEngine({ roomId, room }) {
     setDownloadedDoubleReversedMimicBuffer(null);
     setLocalSecretPhrase('');
     setLocalGuessedPhrase('');
+    setOriginalBlob(null);
+    setPreviewBuffer(null);
+    setPreviewBlob(null);
+    setActiveFilter('normal');
   };
 
   return (
@@ -243,6 +285,75 @@ export default function OnlineGameEngine({ roomId, room }) {
           ) : (
             <div className="py-12 animate-pulse text-lg font-bold opacity-70">
               En attente de l'enregistrement de {p1?.name}...
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* PHASE 1.5: Review & Filter */}
+      {gameState.phase === 'review_original' && (
+        <motion.div animate={{ opacity: 1, scale: 1 }} initial={{ opacity: 0, scale: 0.95 }} className="w-full">
+          <h2 className="text-3xl font-black mb-3">Vérification de <span className="text-teal-500">{p1?.name}</span></h2>
+          
+          {currentUserId === p1?.id ? (
+            <>
+              <p className="opacity-70 mb-8 font-medium text-lg">Écoute ton enregistrement et ajoute un filtre !</p>
+              
+              <div className="flex justify-center mb-8">
+                <button 
+                  onClick={() => previewBuffer && engine.playBuffer(previewBuffer)} 
+                  disabled={isRendering || !previewBuffer || isUploading}
+                  className="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-500 hover:text-white p-6 rounded-full shadow-lg transition-colors disabled:opacity-50"
+                >
+                  {isRendering ? <Loader2 className="animate-spin" size={32} /> : <Play size={32} fill="currentColor" />}
+                </button>
+              </div>
+
+              <div className="mb-10">
+                <h3 className="text-sm font-bold opacity-70 uppercase tracking-wider mb-4">Filtres Vocaux</h3>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {VOICE_FILTERS.map(filter => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setActiveFilter(filter.id)}
+                      disabled={isUploading}
+                      className={`px-4 py-3 rounded-xl font-bold flex flex-col items-center gap-1 transition-all disabled:opacity-50 ${
+                        activeFilter === filter.id 
+                          ? 'bg-rose-500 text-white shadow-lg scale-105' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <span className="text-2xl">{filter.icon}</span>
+                      <span className="text-xs">{filter.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 mt-8">
+                <button 
+                  onClick={handleRetakeOriginal}
+                  disabled={isUploading}
+                  className="flex-1 btn-secondary py-4 text-lg flex justify-center items-center gap-3 disabled:opacity-50"
+                >
+                  <RefreshCw size={20} /> Recommencer
+                </button>
+                <button 
+                  onClick={handleConfirmOriginal}
+                  disabled={isRendering || isUploading}
+                  className="flex-1 btn-primary py-4 text-lg flex justify-center items-center gap-3 disabled:opacity-50"
+                >
+                  {isUploading ? (
+                    <><Loader2 className="animate-spin" size={20} /> Envoi...</>
+                  ) : (
+                    <>Valider & Envoyer <Send size={20} /></>
+                  )}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="py-12 animate-pulse text-lg font-bold opacity-70">
+              {p1?.name} est en train de modifier sa voix...
             </div>
           )}
         </motion.div>
