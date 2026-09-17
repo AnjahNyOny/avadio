@@ -51,39 +51,26 @@ export default function OnlineGameEngine({ roomId, room }) {
   // Download and process audio when URLs change
   useEffect(() => {
     const fetchAudio = async () => {
-      if (gameState.originalAudioUrl && !downloadedOriginalBuffer) {
-        try {
-          const base64String = await roomService.getAudio(roomId, 'original');
-          if (base64String) {
-            const res = await fetch(base64String);
-            const arrayBuffer = await res.arrayBuffer();
-            // We need a copy of arrayBuffer because decodeAudioData detaches it
-            const arrayBufferCopy = arrayBuffer.slice(0);
-            
-            const buffer = await engine.audioContext.decodeAudioData(arrayBuffer);
-            setDownloadedOriginalBuffer(buffer);
-
-            // Simulate reversing it for P2
-            const blob = new Blob([arrayBufferCopy], { type: 'audio/webm' });
-            const revBuffer = await engine.reverseAudio(blob);
-            setDownloadedReversedOriginalBuffer(revBuffer);
-          }
-        } catch (e) {
-          console.error("Error processing original audio", e);
+      if (gameState.originalAudioUrl) {
+        // Ex: "db:original?t=12345" -> extraction du nom du fichier
+        const filename = gameState.originalAudioUrl.split('?')[0].replace('db:', '');
+        const base64 = await roomService.getAudio(roomId, filename);
+        if (base64) {
+          const blob = await fetch(base64).then(res => res.blob());
+          const arrayBuffer = await blob.arrayBuffer();
+          const audioBuffer = await engine.audioContext.decodeAudioData(arrayBuffer);
+          setDownloadedOriginalBuffer(audioBuffer);
+          const reversed = await engine.reverseAudio(blob);
+          setDownloadedReversedOriginalBuffer(reversed);
         }
       }
-
-      if (gameState.mimicAudioUrl && !downloadedDoubleReversedMimicBuffer) {
-        try {
-          const base64String = await roomService.getAudio(roomId, 'mimic');
-          if (base64String) {
-            const res = await fetch(base64String);
-            const blob = await res.blob();
-            const dblRevBuffer = await engine.reverseAudio(blob);
-            setDownloadedDoubleReversedMimicBuffer(dblRevBuffer);
-          }
-        } catch (e) {
-          console.error("Error processing mimic audio", e);
+      if (gameState.mimicAudioUrl) {
+        const filename = gameState.mimicAudioUrl.split('?')[0].replace('db:', '');
+        const base64 = await roomService.getAudio(roomId, filename);
+        if (base64) {
+          const blob = await fetch(base64).then(res => res.blob());
+          const doubleReversed = await engine.reverseAudio(blob);
+          setDownloadedDoubleReversedMimicBuffer(doubleReversed);
         }
       }
     };
@@ -115,6 +102,19 @@ export default function OnlineGameEngine({ roomId, room }) {
     };
     updatePreview();
   }, [originalBlob, activeFilter, gameState.phase, currentUserId, p1?.id]);
+
+  // Réinitialisation des états locaux à chaque nouvelle manche
+  useEffect(() => {
+    setLocalSecretPhrase('');
+    setLocalGuessedPhrase('');
+    setOriginalBlob(null);
+    setPreviewBuffer(null);
+    setPreviewBlob(null);
+    setActiveFilter('normal');
+    setDownloadedOriginalBuffer(null);
+    setDownloadedReversedOriginalBuffer(null);
+    setDownloadedDoubleReversedMimicBuffer(null);
+  }, [gameState.turnIndex]);
 
   const handleStartRecording = async () => {
     await engine.startRecording();
@@ -193,21 +193,11 @@ export default function OnlineGameEngine({ roomId, room }) {
       phase: 'recording_original',
       turnIndex: gameState.turnIndex + 1,
       scores: newScores,
-      originalAudioUrl: null,
-      mimicAudioUrl: null,
-      secretPhrase: null,
-      guessedPhrase: null
+      originalAudioUrl: '',
+      mimicAudioUrl: '',
+      secretPhrase: '',
+      guessedPhrase: ''
     });
-    
-    setDownloadedOriginalBuffer(null);
-    setDownloadedReversedOriginalBuffer(null);
-    setDownloadedDoubleReversedMimicBuffer(null);
-    setLocalSecretPhrase('');
-    setLocalGuessedPhrase('');
-    setOriginalBlob(null);
-    setPreviewBuffer(null);
-    setPreviewBlob(null);
-    setActiveFilter('normal');
   };
 
   return (
@@ -496,13 +486,13 @@ export default function OnlineGameEngine({ roomId, room }) {
             </div>
           </div>
 
-          {(currentUserId === host?.id && gameState.guessedPhrase) && (
+          {(currentUserId === p1?.id && gameState.guessedPhrase) && (
             <button onClick={() => advancePhase('result')} className="btn-primary w-full py-4 text-lg flex justify-center items-center gap-3">
               Passer aux résultats <ArrowRight size={20} />
             </button>
           )}
-          {(currentUserId !== host?.id || !gameState.guessedPhrase) && (
-            <p className="opacity-70 font-medium">L'hôte va choisir le verdict après la proposition.</p>
+          {(currentUserId !== p1?.id || !gameState.guessedPhrase) && (
+            <p className="opacity-70 font-medium">{p1?.name} va choisir le verdict après la proposition.</p>
           )}
         </motion.div>
       )}
@@ -525,7 +515,7 @@ export default function OnlineGameEngine({ roomId, room }) {
           
           <p className="opacity-70 mb-8 text-lg font-medium">Est-ce que <strong className="text-rose-500">{p2?.name}</strong> a trouvé le bon mot ?</p>
           
-          {currentUserId === host?.id ? (
+          {currentUserId === p1?.id ? (
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
               <button 
                 onClick={() => handleGameEnd(true)}
@@ -548,7 +538,7 @@ export default function OnlineGameEngine({ roomId, room }) {
             </div>
           ) : (
              <div className="py-12 animate-pulse text-lg font-bold opacity-70">
-               En attente du verdict de l'hôte...
+               En attente du verdict de {p1?.name}...
              </div>
           )}
         </motion.div>

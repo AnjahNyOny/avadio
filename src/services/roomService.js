@@ -148,8 +148,8 @@ export const roomService = {
       reader.onloadend = async () => {
         const base64String = reader.result; // "data:audio/webm;base64,..."
         await set(ref(db, `rooms/${roomId}/audio/${filename}`), base64String);
-        // On retourne une fausse URL juste pour notifier OnlineGameEngine
-        resolve(`db:${filename}`); 
+        // On retourne une URL unique pour forcer le useEffect de React
+        resolve(`db:${filename}?t=${Date.now()}`); 
       };
       reader.onerror = reject;
       reader.readAsDataURL(blob);

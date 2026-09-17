@@ -114,6 +114,14 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
     setSecretPhrase('');
     setGuessedPhrase('');
     setIsGuessValidated(false);
+    setOriginalBlob(null);
+    setReversedOriginalBuffer(null);
+    setPreviewBuffer(null);
+    setPreviewBlob(null);
+    setActiveFilter('normal');
+    setMimicBlob(null);
+    setReversedMimicBuffer(null);
+    setPhase('recording_original');
     onGameEnd(success);
   };
 
