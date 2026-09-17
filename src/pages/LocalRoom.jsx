@@ -11,6 +11,7 @@ export default function LocalRoom() {
   const [p2Name, setP2Name] = useState('Joueur 2');
   const [scores, setScores] = useState({ 0: 0, 1: 0 }); // 0 for p1, 1 for p2
   const [turnIndex, setTurnIndex] = useState(0);
+  const [timeLimit, setTimeLimit] = useState(0);
 
   const players = [
     { id: '1', name: p1Name },
@@ -35,7 +36,8 @@ export default function LocalRoom() {
           players={players} 
           currentTurnIndex={turnIndex} 
           isLocal={true} 
-          onGameEnd={handleGameEnd} 
+          onGameEnd={handleGameEnd}
+          timeLimit={timeLimit}
         />
       </div>
     );
@@ -82,6 +84,22 @@ export default function LocalRoom() {
             <div className="text-center min-w-[60px]">
               <span className="block text-xs font-bold opacity-50 uppercase tracking-wider mb-1">Score</span>
               <span className="text-4xl font-black text-rose-500">{scores[1]}</span>
+            </div>
+          </div>
+          
+          <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="flex-1">
+              <label className="block text-xs font-bold opacity-70 uppercase tracking-wider mb-2">Limite de temps (Enregistrement)</label>
+              <select 
+                value={timeLimit} 
+                onChange={(e) => setTimeLimit(Number(e.target.value))}
+                className="input-clean font-bold w-full"
+              >
+                <option value={0}>Illimité</option>
+                <option value={10}>10 secondes</option>
+                <option value={15}>15 secondes</option>
+                <option value={20}>20 secondes</option>
+              </select>
             </div>
           </div>
         </div>

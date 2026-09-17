@@ -8,6 +8,7 @@ export default function Home() {
   const [rooms, setRooms] = useState([]);
   const [playerName, setPlayerName] = useState(localStorage.getItem('playerName') || '');
   const [newRoomName, setNewRoomName] = useState('');
+  const [timeLimit, setTimeLimit] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
   const navigate = useNavigate();
 
@@ -27,7 +28,7 @@ export default function Home() {
     e.preventDefault();
     if (!playerName.trim() || !newRoomName.trim()) return;
     
-    const roomId = await roomService.createRoom(newRoomName, playerName);
+    const roomId = await roomService.createRoom(newRoomName, playerName, timeLimit);
     if (roomId) {
       navigate(`/room/${roomId}`);
     }
@@ -104,6 +105,21 @@ export default function Home() {
                   className="input-clean"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-bold opacity-70 mb-2 uppercase tracking-wider">Limite de temps</label>
+                <select 
+                  value={timeLimit} 
+                  onChange={(e) => setTimeLimit(Number(e.target.value))}
+                  className="input-clean font-bold w-full"
+                >
+                  <option value={0}>Illimité</option>
+                  <option value={10}>10 secondes</option>
+                  <option value={15}>15 secondes</option>
+                  <option value={20}>20 secondes</option>
+                </select>
+              </div>
+
               <div className="flex gap-2 mt-2">
                 <button 
                   type="button"

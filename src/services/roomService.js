@@ -3,7 +3,7 @@ import { ref, set, push, onValue, remove, update, get, onDisconnect } from "fire
 
 export const roomService = {
   // Créer une nouvelle room
-  async createRoom(roomName, hostName) {
+  async createRoom(roomName, hostName, timeLimit = 0) {
     if (!auth.currentUser) return null;
     
     const hostId = auth.currentUser.uid;
@@ -16,6 +16,7 @@ export const roomService = {
       name: roomName,
       hostId: hostId,
       state: 'lobby',
+      timeLimit: timeLimit,
       createdAt: Date.now(),
       players: {
         [hostId]: {

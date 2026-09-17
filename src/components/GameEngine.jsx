@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Mic, Square, Play, Check, ArrowRight } from 'lucide-react';
+import { Mic, Square, Play, Check, ArrowRight, Wand2 } from 'lucide-react';
 import { AudioEngine } from '../services/audioEngine';
 import AudioVisualizer from './AudioVisualizer';
+import { getRandomSuggestion } from '../constants/suggestions';
 
 const engine = new AudioEngine();
 
-export default function GameEngine({ players, currentTurnIndex, isLocal, onGameEnd }) {
+export default function GameEngine({ players, currentTurnIndex, isLocal, onGameEnd, timeLimit = 0 }) {
   const [phase, setPhase] = useState('recording_original');
   const [isRecording, setIsRecording] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(null);
   const [originalBlob, setOriginalBlob] = useState(null);
   const [reversedOriginalBuffer, setReversedOriginalBuffer] = useState(null);
   
@@ -22,14 +24,29 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
   const [guessedPhrase, setGuessedPhrase] = useState('');
   const [isGuessValidated, setIsGuessValidated] = useState(false);
 
+  useEffect(() => {
+    let timer;
+    if (isRecording && timeLeft !== null && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (isRecording && timeLeft === 0) {
+      if (phase === 'recording_original') handleStopRecordingOriginal();
+      if (phase === 'recording_mimic') handleStopRecordingMimic();
+    }
+    return () => clearInterval(timer);
+  }, [isRecording, timeLeft, phase]);
+
   const handleStartRecording = async () => {
     await engine.startRecording();
     setIsRecording(true);
+    if (timeLimit > 0) setTimeLeft(timeLimit);
   };
 
   const handleStopRecordingOriginal = async () => {
     const blob = await engine.stopRecording();
     setIsRecording(false);
+    setTimeLeft(null);
     setOriginalBlob(blob);
     // Prepare the reversed version immediately
     const reversedBuffer = await engine.reverseAudio(blob);
@@ -40,6 +57,7 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
   const handleStopRecordingMimic = async () => {
     const blob = await engine.stopRecording();
     setIsRecording(false);
+    setTimeLeft(null);
     setMimicBlob(blob);
     // Prepare the double-reversed version
     const doubleReversedBuffer = await engine.reverseAudio(blob);
@@ -78,17 +96,30 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
           <h2 className="text-3xl font-black mb-3">Tour de <span className="text-teal-500">{p1.name}</span></h2>
           <p className="opacity-70 mb-6 font-medium text-lg">Écris la phrase secrète, puis enregistre-la !</p>
           
-          <div className="mb-8">
+          <div className="mb-8 w-full max-w-md mx-auto relative">
             <input 
               type="text" 
               value={secretPhrase}
               onChange={(e) => setSecretPhrase(e.target.value)}
               placeholder="Ex: Le petit chat boit du lait"
-              className="input-clean text-center font-bold text-lg"
+              className="input-clean text-center font-bold text-lg w-full pr-12"
             />
+            <button 
+              onClick={() => setSecretPhrase(getRandomSuggestion())}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-teal-500 transition-colors"
+              title="Suggérer une phrase"
+            >
+              <Wand2 size={20} />
+            </button>
           </div>
 
           <AudioVisualizer engine={engine} isRecording={isRecording} />
+          
+          {isRecording && timeLimit > 0 && (
+            <div className="mt-4 text-2xl font-black text-rose-500 animate-pulse">
+              00:{timeLeft.toString().padStart(2, '0')}
+            </div>
+          )}
 
           <div className="flex justify-center mt-8">
             {!isRecording ? (
@@ -133,8 +164,14 @@ export default function GameEngine({ players, currentTurnIndex, isLocal, onGameE
            <p className="opacity-70 mb-8 font-medium text-lg">Tu peux réécouter l'extrait autant de fois que tu veux !</p>
            
            <AudioVisualizer engine={engine} isRecording={isRecording} />
+           
+           {isRecording && timeLimit > 0 && (
+            <div className="mt-4 text-2xl font-black text-rose-500 animate-pulse">
+              00:{timeLeft.toString().padStart(2, '0')}
+            </div>
+          )}
 
-           <div className="flex justify-center mb-10">
+           <div className="flex justify-center mb-10 mt-6">
             <button onClick={playReversedOriginal} className="bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 px-6 rounded-full flex items-center gap-2 transition-colors font-bold">
               <Play size={18} fill="currentColor" /> Réécouter l'extrait
             </button>
