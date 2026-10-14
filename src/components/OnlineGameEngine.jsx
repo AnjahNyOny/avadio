@@ -23,6 +23,7 @@ export default function OnlineGameEngine({ roomId, room }) {
 
   // Local review states for P1
   const [originalBlob, setOriginalBlob] = useState(null);
+  const [previewBuffer, setPreviewBuffer] = useState(null);
   const [previewBlob, setPreviewBlob] = useState(null);
   const [previewReversedBuffer, setPreviewReversedBuffer] = useState(null);
   const [activeFilter, setActiveFilter] = useState('normal');
